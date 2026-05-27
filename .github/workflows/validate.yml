@@ -34,7 +34,7 @@ jobs:
           while IFS= read -r file; do
             [ -z "${file}" ] && continue
             echo "Validating ${file}"
-            ajv validate -s schema/app.schema.json -d "${file}" --strict=false
+            ajv validate -s schema/app.schema.json -d "${file}" --spec=draft7 --strict=false
           done <<< "${{ steps.changed.outputs.files }}"
 
       - name: Slug uniqueness within community-apps (hard fail)
