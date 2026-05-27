@@ -1,0 +1,9 @@
+{
+  "slug": "Bad Slug Has Spaces",
+  "title": "X",
+  "blurb": "ok",
+  "author": { "github": "smoke" },
+  "repo": "http://not-https.example.com",
+  "shape": "widget-not-in-enum",
+  "isolation": "iframe"
+}
