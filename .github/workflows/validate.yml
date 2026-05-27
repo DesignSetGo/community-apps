@@ -1,0 +1,78 @@
+name: Validate submission
+on:
+  pull_request:
+    paths: ['apps/**']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed app files
+        id: changed
+        run: |
+          set -euo pipefail
+          files=$(git diff --name-only origin/main HEAD -- 'apps/*.json' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${files}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Install ajv-cli
+        run: npm i -g ajv-cli@5
+
+      - name: Schema validation (hard fail)
+        if: steps.changed.outputs.files != ''
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            echo "Validating ${file}"
+            ajv validate -s schema/app.schema.json -d "${file}" --strict=false
+          done <<< "${{ steps.changed.outputs.files }}"
+
+      - name: Slug uniqueness within community-apps (hard fail)
+        if: steps.changed.outputs.files != ''
+        run: |
+          set -euo pipefail
+          slugs=$(find apps -name '*.json' -print0 | xargs -0 -I{} sh -c "jq -r .slug '{}'")
+          dupes=$(echo "${slugs}" | sort | uniq -d || true)
+          if [ -n "${dupes}" ]; then
+            echo "::error::Duplicate slugs detected: ${dupes}"
+            exit 1
+          fi
+
+      - name: URL liveness (advisory)
+        if: steps.changed.outputs.files != ''
+        run: |
+          set +e
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            for field in repo screenshot live_url; do
+              url=$(jq -r ".${field} // empty" "${file}")
+              [ -z "${url}" ] && continue
+              code=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 10 --retry 1 "${url}")
+              if [ "${code}" != "200" ]; then
+                echo "::warning file=${file}::${field}=${url} returned ${code} (advisory only)"
+              fi
+            done
+          done <<< "${{ steps.changed.outputs.files }}"
+
+      - name: Profanity check (advisory)
+        if: steps.changed.outputs.files != ''
+        run: |
+          set +e
+          WORDS='\b(fuck|shit|asshole|nazi)\b'
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            hits=$(jq -r '.title + " " + .blurb' "${file}" | grep -iE "${WORDS}" || true)
+            if [ -n "${hits}" ]; then
+              echo "::warning file=${file}::profanity wordlist hit; flag for human review"
+            fi
+          done <<< "${{ steps.changed.outputs.files }}"
