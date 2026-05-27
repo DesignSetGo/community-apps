@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema",
   "$id": "https://github.com/DesignSetGo/community-apps/schema/app.schema.json",
   "title": "Community app entry",
   "type": "object",
